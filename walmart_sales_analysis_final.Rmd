@@ -1,0 +1,400 @@
+---
+title: "Walmart Store Sales Analysis"
+author: "Dylan Henegar"
+date: "2024-08-04"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# Set the working directory
+setwd("C:/Users/Hoolie/Documents/Data Analysis Portfolio Projects/Walmart Sales/RAW data")
+
+# Function to install packages if not already installed
+install_if_missing <- function(p) {
+  if (!requireNamespace(p, quietly = TRUE)) {
+    install.packages(p)
+  }
+}
+
+# List of required packages
+packages <- c("tidyverse", "readr", "lubridate", "ggplot2", "dplyr")
+
+# Install missing packages
+sapply(packages, install_if_missing)
+
+# Load the packages
+lapply(packages, library, character.only = TRUE)
+
+# Load the Data
+walmart_sales_data<- read.csv("walmart_sales.csv")
+
+# Ensure Date column is formatted correctly as date
+walmart_sales_data$Date <- dmy(walmart_sales_data$Date)
+
+# Check for missing/duplicated data
+missing_values <- sum(is.na(walmart_sales_data))
+duplicated_values <- sum(duplicated(walmart_sales_data))
+
+# Extract Year from Date column and create new "Year" column
+walmart_sales_data$Year <- format(as.Date(walmart_sales_data$Date), "%Y")
+
+# Extract Month from Date and create new "Month" column
+walmart_sales_data$Month <- format(walmart_sales_data$Date, "%m")
+
+# Build a correlation Matrix
+sales_data_num <- walmart_sales_data[sapply(walmart_sales_data, is.numeric)] # Select only numeric values
+sales_data_num <- subset(walmart_sales_data, select = -c(Store, Date, Year, Month))
+ # remove store, year, month, and date columns from matrix
+correlation_matrix<-cor(sales_data_num, use = "complete.obs") # Build Correlation matrix
+
+# Create a function to assign seasons based on the month
+get_season <- function(month) {
+  if (month %in% c("12", "01", "02")) {
+    return("Winter")
+  } else if (month %in% c("03", "04", "05")) {
+    return("Spring")
+  } else if (month %in% c("06", "07", "08")) {
+    return("Summer")
+  } else if (month %in% c("09", "10", "11")) {
+    return("Fall")
+  } else {
+    return(NA)
+  }
+}
+
+# Add the season column to the dataset
+walmart_sales_data$Season <- sapply(walmart_sales_data$Month, get_season)
+
+# Aggregate data to get total sales by year and season
+seasonal_sales <- aggregate(Weekly_Sales ~ Year + Season, data = walmart_sales_data, sum)
+
+# Create store summary for avg sales, median sales, and std dev
+store_summary <- walmart_sales_data %>%
+  group_by(Store) %>%
+  summarise(
+    Mean_Sales = mean(Weekly_Sales),
+    Median_Sales = median(Weekly_Sales),
+    SD_Sales = sd(Weekly_Sales)
+  )
+
+```
+
+# Walmart Sales Analysis - 2010-2012
+
+## Introduction
+
+"Walmart Inc. is an American multinational retail corporation that operates a chain of hypermarkets (also called supercenters), discount department stores, and grocery stores in the United States and 23 other countries. It is headquartered in Bentonville, Arkansas" --Wikipedia
+
+This report analyzes the sales performance of a subset of Walmart stores using historical sales data. The objectives of the analysis are to understand sales trends, identify seasonal patterns, and determine the impact of external factors such as holidays, temperature, fuel prices, CPI, and unemployment rates on weekly sales.
+
+## Data Description
+
+The data is from a dataset that was downloaded from Kaggle [here](https://www.kaggle.com/datasets/mikhail1681/walmart-sales) It is a contains data on a collection of Walmart stores' weekly sales from 2010-2012, below is a list of the columns and a description of the data contained in them:
+
+```{r data description}
+# Ensure packages are loaded
+library(ggplot2)
+library(dplyr)
+
+# Describe the columns
+data_description <- data.frame(
+  Column = c("Store", "Date", "Weekly_Sales", "Holiday_Flag", "Temperature", "Fuel_Price", "CPI", "Unemployment"),
+  Description = c("Store number", "Sales week start date", "Sales", "Mark on the presence or absence of a holiday", "Air temperature in the region", "Fuel cost in the region", "Consumer price index", "Unemployment rate")
+)
+
+# Display the description
+print(data_description)
+```
+
+## Methodology
+
+The analysis performed in this report will be performed using R. The packages that will be used include: tidyverse, readr, dplyr, ggplot, and lubridate.
+
+```{r load needed packages}
+install.packages("tidyverse")
+install.packages("readr")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("lubridate")
+install.packages("corrplot")
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(corrplot)
+```
+
+```{r load dataset}
+# Set Working Directory
+setwd("C:/Users/Hoolie/Documents/Data Analysis Portfolio Projects/Walmart Sales/RAW data")
+
+# Load the Data
+walmart_sales_data<- read.csv("walmart_sales.csv")
+```
+
+The analysis was performed in the following steps:
+
+1.  **Data Cleaning:** Ensured all dates were in the correct format and handled any missing or incorrect values.
+2.  **Data Aggregation:** Aggregated data to calculate total sales by year and season.
+3.  **Visualization:** Created various plots to visualize sales trends, seasonal patterns, and the impact of external factors.
+
+### Data Cleaning
+
+First step is checking the data for missing and/or duplicated values and ensuring the date column in in the correct format.
+
+```{r data cleaning}
+
+# Check for missing/duplicated data
+missing_values <- sum(is.na(walmart_sales_data))
+duplicated_values <- sum(duplicated(walmart_sales_data))
+
+# Ensure Date column is formatted correctly as date
+walmart_sales_data$Date <- dmy(walmart_sales_data$Date)
+
+```
+
+Missing Values
+
+```{r missing values}
+print(missing_values)
+```
+
+Duplicated Values
+
+```{r duplicated values}
+print(duplicated_values)
+
+```
+
+Ensure columns formatted correctly
+```{r check format of columns}
+str(walmart_sales_data)
+```
+### Aggregation
+To perform yearly and seasonal analysis, extracted the month and year from the 'Date' column and created new columns 'Month' and 'Year'. Next, added season column to group data into: Spring, Summer, Fall, Winter in a new column 'Season'
+```{r extract month, year from dataset}
+
+# Extract Month from Date and create new "Month" column
+walmart_sales_data$Month <- format(walmart_sales_data$Date, "%m")
+
+# Extract Year from Date column and create new "Year" column
+walmart_sales_data$Year <- format(as.Date(walmart_sales_data$Date), "%Y")
+
+# Create a function to assign seasons based on the month
+get_season <- function(month) {
+  if (month %in% c("12", "01", "02")) {
+    return("Winter")
+  } else if (month %in% c("03", "04", "05")) {
+    return("Spring")
+  } else if (month %in% c("06", "07", "08")) {
+    return("Summer")
+  } else if (month %in% c("09", "10", "11")) {
+    return("Fall")
+  } else {
+    return(NA)
+  }
+}
+
+# Add the season column to the dataset
+walmart_sales_data$Season <- sapply(walmart_sales_data$Month, get_season)
+```
+
+Check a preview of the data
+```{r head of data}
+head(walmart_sales_data)
+```
+
+## Analysis
+
+In this section, we perform a detailed analysis of the sales performance data. The analysis includes the following key components:
+
+**Sales Distribution Analysis**: We examine the distribution of weekly sales to understand the overall sales performance.
+**Seasonal Sales Analysis**: We break down the total weekly sales by season and year to identify the impact of different seasons on sales performance.
+**Impact of External Factors**: We investigate the relationship between weekly sales and various external factors such as temperature, fuel prices, CPI, and unemployment rates.
+**Holiday Sales Analysis**: We compare sales performance during holiday weeks with non-holiday weeks to understand the impact of holidays on sales. 
+
+Each of these components is visualized using appropriate plots and graphs to provide clear and actionable insights. The results of these analyses are presented below.
+
+Below is an overall summary of the data:
+```{r summary}
+summary(walmart_sales_data)
+
+```
+### Sales Distribution
+
+```{r sales distribution}
+ggplot(walmart_sales_data, aes(x = Weekly_Sales)) +
+  geom_histogram(binwidth = 5000, fill = "#69b3a2", color = "purple", alpha = 0.7) +
+  geom_density(aes(y = ..count.. * 5000), color = "red", linewidth = 1, alpha = 0.7) + 
+  labs(title = "Distribution of Weekly Sales", x = "Weekly Sales", y = "Frequency") +
+  theme_minimal(base_size = 15) + 
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "gray95", color = NA)
+  ) +
+  scale_x_continuous(labels = scales::dollar_format(prefix = "$")) + 
+  scale_y_continuous(labels = scales::comma)
+```
+The above graph shows the distribution of total weekly sales throughout the dataset. This shows that there is a fairly normal distribution of sales, with relatively few outliers. Most stores have sales that are under $2,000,000 per week. 
+
+### Seasonal Sales Analysis
+
+```{r seasonal sales}
+ggplot(seasonal_sales, aes(x = Year, y = Weekly_Sales, fill = Season)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Total Weekly Sales by Season - Yearly", x = "Year", y = "Weekly Sales") +
+  theme_light() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "gray95", color = NA)
+  ) +
+  scale_y_continuous(labels = scales::dollar_format(prefix = "$"))
+```
+The above chart shows the total sales by season over each year in the data. This shows that Summer is the busiest season typically, Spring is the 2nd busiest and most consistent season followed by Fall then Winter.
+
+### Impact of External Factors
+
+**Correlation Matrix**
+```{r correlation matrix}
+# Build a correlation Matrix
+sales_data_num <- walmart_sales_data[sapply(walmart_sales_data, is.numeric)] # Select only numeric values
+sales_data_num <- subset(walmart_sales_data, select = -c(Store, Date, Year, Month, Season))
+ # remove store, year, month, season and date columns from matrix
+correlation_matrix<-cor(sales_data_num, use = "complete.obs") # Build Correlation matrix
+
+# Display matrix
+corrplot(correlation_matrix, method = "circle", addCoef.col = "black", diag = FALSE)
+```
+This illustrates the correlation of the different variables across the dataset. When comparing to weekly sales the most significant variable that has a negative correlation is unemployment. CPI and Temperature have very slight negative correlations, while Fuel Price and Holidays have slight positive correlations. From this correlation matrix, we can hypothesize that areas of high unemployement will see the lowest sales on average. We can also hypothesize that sales across all stores will be higher during holiday weeks. 
+
+**Sales vs. Temperature**
+```{r sales vs temp}
+ggplot(walmart_sales_data, aes(x = Temperature, y = Weekly_Sales)) +
+  geom_hex(bins = 30) +
+  scale_fill_continuous(type = "viridis") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Weekly Sales vs. Temperature", 
+       x = "Temperature", 
+       y = "Weekly_Sales") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::dollar_format(prefix = "$"))
+```
+
+**Sales vs Fuel Price**
+
+```{r sales vs fuel price}
+ggplot(walmart_sales_data, aes(x = Fuel_Price)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "purple", alpha = 0.5) +
+  geom_density(color = "red") +
+  labs(title = "Fuel Price Distribution",
+       x = "Fuel Price", 
+       y = "Density") +
+  theme_minimal()
+```
+
+**Sales: Holiday vs Non-Holiday**
+```{r}
+# Summarize average weekly sales by holiday flag
+average_sales <- walmart_sales_data %>%
+  group_by(Holiday_Flag) %>%
+  summarise(Average_Weekly_Sales = mean(Weekly_Sales, na.rm = TRUE))
+
+# Bar plot for average sales by holiday flag
+ggplot(average_sales, aes(x = as.factor(Holiday_Flag), y = Average_Weekly_Sales)) +
+  geom_bar(stat = "identity", fill = "purple", color = "black", alpha = 0.5) +
+  labs(title = "Average Weekly Sales by Holiday", 
+       x = "Holiday Flag", 
+       y = "Average Weekly Sales") +
+  scale_x_discrete(labels = c("0" = "Non-Holiday", "1" = "Holiday")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "gray95", color = NA)
+  ) +
+  scale_y_continuous(labels = scales::dollar_format(prefix = "$"))
+```
+
+**Sales vs CPI**
+
+```{r cpi distribution}
+ggplot(walmart_sales_data, aes(x = CPI)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "purple", alpha = .5) +
+  geom_density(color = 'red', size = 1) +
+  labs(title = "Sales Distribution over CPI", x = "CPI", y = "Density") +
+  theme_minimal()
+```
+
+**Sales vs Unemployment**
+
+```{r sales vs unemployment}
+ggplot(walmart_sales_data, aes(x = Unemployment)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "purple", alpha = .5) +
+  geom_density(color = "red", linewidth = 1) +
+  labs(title = "Sales Distribution over Uneployment", x = "Unemployment (%)", y = "Density") +
+  theme_minimal()
+```
+
+### Holiday Sales Analysis
+
+```{r}
+ggplot(average_sales, aes(x = as.factor(Holiday_Flag), y = Average_Weekly_Sales)) +
+  geom_bar(stat = "identity", fill = "purple", color = "black", alpha = 0.5) +
+  labs(title = "Average Weekly Sales by Holiday", 
+       x = "Holiday Flag", 
+       y = "Average Weekly Sales") +
+  scale_x_discrete(labels = c("0" = "Non-Holiday", "1" = "Holiday")) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text = element_text(size = 12),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "gray95", color = NA)
+  ) +
+  scale_y_continuous(labels = scales::dollar_format(prefix = "$"))
+```
+
+```{r t-test}
+
+## Add Holiday_Week
+walmart_sales_data$Holiday_Week <- ifelse(walmart_sales_data$Holiday_Flag == 1, "Holiday", "Non-Holiday")
+
+## T-Test
+t_test_results <- t.test(Weekly_Sales ~ Holiday_Week, data = walmart_sales_data)
+print(t_test_results)
+```
+
+By observing weekly sales data for holiday vs non-holiday weeks, we can see that holiday weeks on average have higher sales. This information will allow better planning for holiday weeks (inventory and staffing) and further analysis could provide more details on specific products to put on sale during holiday vs non-holiday weeks.
+
+## Conclusion
+
+The analysis revealed several key insights:
+- **Seasonality:** Sales showed clear seasonal patterns, with busiest season being Summer.
+- **External Factors:** Temperature, unemployment and fuel prices have impact(s) on sales
+- **Holiday Effect:** Sales were higher on average during holiday weeks.
+
+These insights can help in strategic planning, such as inventory management, marketing campaigns, and staffing decisions.
+
